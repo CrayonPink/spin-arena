@@ -23,6 +23,11 @@ button{font-size:clamp(12px,2.7vh,15px);font-weight:750}
 .track{height:clamp(5px,1.35vh,10px);background:#343943;border-radius:3px;margin-top:4px;overflow:hidden}
 .fill{height:100%;width:100%;background:currentColor;transition:width .18s ease}
 .red .fill{margin-left:auto}
+.stage.free-for-all{--score-height:clamp(70px,15dvh,116px)}
+.free-for-all .score{grid-template-rows:repeat(2,minmax(0,1fr));row-gap:2px;padding-block:4px}
+.free-for-all .shot-clock{grid-area:1/2/3/3;align-self:center}
+.free-for-all .track{height:5px;margin-top:2px}
+.fighter[data-eliminated="true"]{opacity:.4}
 .shot-clock{display:flex;align-items:center;justify-content:center;min-width:clamp(38px,9vw,64px);padding:2px 4px;border:1px solid #62737d;border-radius:8px;background:#121a24e8;color:#c9e9f1;font-size:11px;font-weight:750;white-space:nowrap}
 .shot-clock strong{font-size:clamp(22px,5.5vh,30px);font-weight:850;line-height:1;font-variant-numeric:tabular-nums}
 .shot-clock[data-urgent="true"]{color:#ffc087;border-color:#e08e64}
@@ -63,6 +68,7 @@ button:focus-visible{outline:2px solid #fff;outline-offset:2px}
 .stage:has(.fast-mode-guide:not([hidden])) .fast-mode-arrow{display:block;position:absolute;left:50%;top:calc(100% + 8px);transform:translateX(-50%);color:var(--blue);font-size:32px;line-height:1;pointer-events:none}
 @media(max-width:480px){.tutorial{top:calc(var(--hud-row) + 46px);left:var(--hud-left);right:var(--hud-right)}}
 @media(max-width:420px){.fighter-head{flex-wrap:wrap;row-gap:0}}
+@media(max-width:350px){.free-for-all .name{font-size:12px}.free-for-all .hp{font-size:10px}}
 @media(prefers-reduced-motion:reduce){.fill{transition:none}}
 </style>
 </head>
@@ -75,7 +81,9 @@ button:focus-visible{outline:2px solid #fff;outline-offset:2px}
   <section class="score" aria-label="대전 현황">
     <div class="fighter"><div class="fighter-head"><span class="name">교주의 팽이</span><span id="blueHp" class="hp">100 HP</span></div><div class="track"><div id="blueFill" class="fill"></div></div></div>
     <div id="shotClock" class="shot-clock" role="timer" aria-label="팽이를 치기까지 남은 초" hidden><strong id="shotSeconds">10</strong></div>
-    <div class="fighter red"><div class="fighter-head"><span class="name">칸타의 팽이</span><span id="redHp" class="hp">100 HP</span></div><div class="track"><div id="redFill" class="fill"></div></div></div>
+    <div class="fighter red"><div class="fighter-head"><span class="name">마요의 팽이</span><span id="redHp" class="hp">100 HP</span></div><div class="track"><div id="redFill" class="fill"></div></div></div>
+    <div class="fighter" style="color:#95df86" hidden><div class="fighter-head"><span class="name">마리의 팽이</span><span id="greenHp" class="hp">100 HP</span></div><div class="track"><div id="greenFill" class="fill"></div></div></div>
+    <div class="fighter red" style="color:#ceb1ff" hidden><div class="fighter-head"><span class="name">에르핀의 팽이</span><span id="purpleHp" class="hp">100 HP</span></div><div class="track"><div id="purpleFill" class="fill"></div></div></div>
   </section>
   <div id="tutorialIntro" class="tutorial" hidden>
     <div class="tutorial-copy"><strong id="tutorialIntroText" aria-live="polite">이것은 교주의 팽이입니다</strong></div>
@@ -87,17 +95,17 @@ button:focus-visible{outline:2px solid #fff;outline-offset:2px}
   <div id="tutorialPractice" class="tutorial" hidden>
     <div class="tutorial-copy">
       <strong id="tutorialInstruction">꾹 누른 상태로 방향을 정한 뒤 손을 떼서 팽이 치기</strong>
-      <span><span id="tutorialGoal">내 팽이를 쳐서 칸타의 팽이를 3번 벽에 부딪히게 하기</span> <b id="tutorialProgress" aria-live="polite">0/3</b></span>
+      <span><span id="tutorialGoal">내 팽이를 쳐서 마요의 팽이를 3번 벽에 부딪히게 하기</span> <b id="tutorialProgress" aria-live="polite">0/3</b></span>
     </div>
     <button type="button" id="tutorialConfirm" class="primary" hidden>확인</button>
   </div>
   <div id="ready" class="result">
     <strong id="tutorialSuccess" role="status" hidden>튜토리얼 성공</strong>
-    <span id="challengeIntro" class="challenge-text">세 판 연속 승리하면 클리어</span>
+    <span class="challenge-text">4인 난투에서 최후까지 살아남기 · 3연승 시 클리어</span>
     <button id="begin" class="primary">게임 시작</button>
   </div>
   <div id="result" class="result" hidden><strong id="verdict" role="status"></strong><span id="resultProgress" class="challenge-text"></span><button id="rematch" class="primary">다시하기</button></div>
-  <span class="version">v0.61</span>
+  <span class="version">v0.62</span>
   <div id="fastModeGuide" class="fast-mode-guide" hidden>
     <div class="tutorial-copy">
       <strong>배속 모드를 활성화하면 경로 표시 없이 빠르게 진행할 수 있습니다</strong>
@@ -120,7 +128,6 @@ const ctx = canvas.getContext('2d');
 const ready = document.querySelector('#ready');
 const beginButton = document.querySelector('#begin');
 const tutorialSuccess = document.querySelector('#tutorialSuccess');
-const challengeIntro = document.querySelector('#challengeIntro');
 const result = document.querySelector('#result');
 const verdict = document.querySelector('#verdict');
 const rematchButton = document.querySelector('#rematch');
@@ -140,8 +147,8 @@ const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const TAU = Math.PI * 2;
 const MAX_HP = 100;
 const RADIUS = 26;
-const ARENA_RADIUS = 225;
-const WALL_RADIUS = ARENA_RADIUS - RADIUS - 6;
+const PRACTICE_RADIUS = 225;
+const BATTLE_RADIUS = 300;
 const FIXED_STEP = 1 / 120;
 const JOYSTICK_DEAD_ZONE = 7;
 const CHARGE_SLOW_RATE = .20;
@@ -156,16 +163,19 @@ const PLAYER_DASH_DRAG = 1.15;
 const IDLE_DRAG = 5.5;
 const palette = [
   { light:'#a7efff', bright:'#64d5f4', mid:'#2d97b8', dark:'#174760', name:'교주의 팽이' },
-  { light:'#ffceb4', bright:'#ff896b', mid:'#c75942', dark:'#623324', name:'칸타의 팽이' }
+  { light:'#ffceb4', bright:'#ff896b', mid:'#c75942', dark:'#623324' },
+  { light:'#dcffd1', bright:'#95df86', mid:'#518d4c', dark:'#29472d' },
+  { light:'#f0e5ff', bright:'#ceb1ff', mid:'#8d65ba', dark:'#4d356d' }
 ];
-const hud = [
-  [document.querySelector('#blueHp'), document.querySelector('#blueFill')],
-  [document.querySelector('#redHp'), document.querySelector('#redFill')]
-];
+const hud = Array.from(score.querySelectorAll('.fighter'), fighter => ({
+  fighter, hp: fighter.querySelector('.hp'), fill: fighter.querySelector('.fill')
+}));
 const random = (min, max) => min + Math.random() * (max - min);
 const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
 
 let tops, round, sparks, hits, rings;
+let arenaRadius = PRACTICE_RADIUS;
+let wallRadius = arenaRadius - RADIUS - 6;
 let drawWidth = 0, drawHeight = 0, scale = 1, density = 1;
 let arenaCenterY = 0;
 let joystickRadius = 64;
@@ -186,8 +196,8 @@ function showTutorialConfirmation() {
 
 function beginCombatPractice() {
   tutorial = { stage: 'combat', wallHits: 0, enemyKnocked: false, nextAt: null };
-  tutorialInstruction.textContent = '칸타의 팽이는 교주의 팽이와 동시에 움직입니다';
-  tutorialGoal.textContent = '행동하는 칸타의 팽이를 3번 벽에 부딪히게 하기';
+  tutorialInstruction.textContent = '마요의 팽이는 교주의 팽이와 동시에 움직입니다';
+  tutorialGoal.textContent = '행동하는 마요의 팽이를 3번 벽에 부딪히게 하기';
   tutorialProgress.textContent = '0/' + TUTORIAL_HITS;
   showTutorialConfirmation();
 }
@@ -196,27 +206,31 @@ function completeTutorial() {
   tutorial = null;
   tutorialPractice.hidden = true;
   tutorialSuccess.hidden = false;
-  challengeIntro.hidden = true;
   beginButton.textContent = '본 게임 시작';
-  round.started = false;
-  ready.hidden = false;
+  resetRound();
   beginButton.focus();
 }
 
 function resetRound(started = false) {
   pendingDash = null;
-  tops = palette.map((color, index) => {
-    const side = index ? 1 : -1;
+  arenaRadius = tutorial ? PRACTICE_RADIUS : BATTLE_RADIUS;
+  wallRadius = arenaRadius - RADIUS - 6;
+  stage.classList.toggle('free-for-all', !tutorial);
+  const fighters = tutorial ? palette.slice(0, 2) : palette;
+  tops = fighters.map((color, index) => {
+    const side = index % 2 ? 1 : -1;
+    const angle = Math.PI / 2 + index * TAU / fighters.length;
     return {
-      color, hp: MAX_HP, x: side * ARENA_RADIUS * .49, y: side * ARENA_RADIUS * .25,
+      color, hp: MAX_HP,
+      x: arenaRadius * (tutorial ? side * .49 : Math.cos(angle) * .53),
+      y: arenaRadius * (tutorial ? side * .25 : Math.sin(angle) * .53),
       vx: 0, vy: 0, spin: random(0, TAU), direction: -side, phase: 'idle',
-      stagger: 0, trail: []
+      dashUntil: 0, stagger: 0, trail: []
     };
   });
   gesture = null;
   round = {
-    elapsed: 0, started, enemyDashUntil: 0,
-    playerDashUntil: 0, nextStrike: 0, shotTime: started && !tutorial ? SHOT_WINDOW : null,
+    elapsed: 0, started, nextStrike: 0, shotTime: started && !tutorial ? SHOT_WINDOW : null,
     over: false, freeze: 0, shake: 0
   };
   sparks = [];
@@ -228,12 +242,17 @@ function resetRound(started = false) {
   result.hidden = true;
   updateShotClock();
   updateHud();
+  resize();
 }
 
 function updateHud() {
-  tops.forEach((top, index) => {
-    hud[index][0].textContent = top.hp + ' HP';
-    hud[index][1].style.width = (top.hp / MAX_HP * 100) + '%';
+  hud.forEach(({ fighter, hp, fill }, index) => {
+    const top = tops[index];
+    fighter.hidden = !top;
+    if (!top) return;
+    hp.textContent = top.hp + ' HP';
+    fill.style.width = (top.hp / MAX_HP * 100) + '%';
+    fighter.dataset.eliminated = String(top.hp === 0);
   });
 }
 
@@ -242,23 +261,22 @@ function finish() {
   round.over = true;
   gesture = null;
   updateShotClock();
-  const [blue, red] = tops;
-  const winner = blue.hp === red.hp ? null : blue.hp > red.hp ? blue : red;
-  const won = winner === blue;
+  const won = tops[0].hp > 0;
+  const draw = tops.every(top => top.hp === 0);
   challengeWins = won ? challengeWins + 1 : 0;
   const cleared = challengeWins === WINS_TO_CLEAR;
-  verdict.textContent = cleared ? '게임 클리어!' : won ? '승리' : winner === red ? '패배' : '무승부';
+  verdict.textContent = cleared ? '게임 클리어!' : won ? '승리' : draw ? '무승부' : '패배';
   resultProgress.textContent = won
     ? challengeWins + ' / ' + WINS_TO_CLEAR + ' 승리'
     : '첫 판부터 다시 시작';
   rematchButton.textContent = cleared ? '처음부터' : won ? '다음 게임' : '다시하기';
-  verdict.style.color = cleared ? '#ffe4a0' : winner?.color.light || '#f3eee2';
+  verdict.style.color = cleared ? '#ffe4a0' : won ? tops[0].color.light : '#f3eee2';
   result.hidden = false;
 }
 
 function updateTop(top, dt) {
   const isPlayer = top === tops[0];
-  const dashUntil = isPlayer ? round.playerDashUntil : round.enemyDashUntil;
+  const dashUntil = top.dashUntil;
   top.stagger -= dt;
   if (top.phase === 'dash' && round.elapsed >= dashUntil) top.phase = 'idle';
 
@@ -284,11 +302,11 @@ function updateTop(top, dt) {
 
 function keepInside(top, duringPlay = false) {
   const distance = Math.hypot(top.x, top.y);
-  if (distance <= WALL_RADIUS) return;
+  if (distance <= wallRadius) return;
   const nx = top.x / distance;
   const ny = top.y / distance;
-  top.x = nx * WALL_RADIUS;
-  top.y = ny * WALL_RADIUS;
+  top.x = nx * wallRadius;
+  top.y = ny * wallRadius;
   const outward = top.vx * nx + top.vy * ny;
   if (outward > 0) {
     const tutorialWallHit = duringPlay && tutorial?.enemyKnocked && top === tops[1];
@@ -313,7 +331,8 @@ function keepInside(top, duringPlay = false) {
 }
 
 function canStrike() {
-  return round.started && !round.over && !pendingDash && (!tutorial || tutorial.nextAt === null) && tops.every(top => top.hp > 0)
+  return round.started && !round.over && !pendingDash && (!tutorial || tutorial.nextAt === null)
+    && tops[0].hp > 0 && tops.slice(1).some(top => top.hp > 0)
     && round.elapsed >= round.nextStrike;
 }
 
@@ -351,17 +370,16 @@ function isWeakSideMove(player, enemy, angle, power) {
   return power > 0 && power <= .4 && Math.abs(Math.cos(angle - towardEnemy)) <= .5;
 }
 
-function chooseEnemyMove(weakSideMove) {
+function chooseEnemyMove() {
   if (Math.random() >= .5) {
     return { tactic: 'dodge', power: random(.05, .23), preferredSide: Math.random() < .5 ? -1 : 1 };
   }
-  if (weakSideMove && Math.random() >= .5) return { tactic: 'lead', power: random(.6, .95) };
   return { tactic: 'headOn', power: random(.6, .95) };
 }
 
 function distanceToWall(top, angle) {
   const along = top.x * Math.cos(angle) + top.y * Math.sin(angle);
-  const outside = top.x * top.x + top.y * top.y - WALL_RADIUS * WALL_RADIUS;
+  const outside = top.x * top.x + top.y * top.y - wallRadius * wallRadius;
   const discriminant = along * along - outside;
   if (discriminant < 0) return 0;
   return Math.max(0, -along + Math.sqrt(discriminant));
@@ -378,18 +396,18 @@ function playerTravelToWall(top, angle, speed, duration) {
   return Math.min(dashTravel + coastTravel, distanceToWall(top, angle));
 }
 
-function predictAngle(player, enemy, playerAngle, playerPower, enemySpeed, enemyDuration) {
-  const playerSpeed = playerDashSpeed(playerPower);
-  const playerDuration = dashDuration(playerPower);
-  const wallDistance = distanceToWall(player, playerAngle);
-  const dx = Math.cos(playerAngle);
-  const dy = Math.sin(playerAngle);
+function predictAngle(target, enemy, targetDash, enemySpeed, enemyDuration) {
+  const { angle, speed, duration, phase } = targetDash;
+  const wallDistance = distanceToWall(target, angle);
+  const dx = Math.cos(angle);
+  const dy = Math.sin(angle);
   function travelAt(time) {
-    const dashTime = Math.min(time, playerDuration);
+    const dashTime = Math.min(time, duration);
+    if (phase === 'dodge') return Math.min(wallDistance, speed * dashTime * (1 - dashTime / (2 * duration)));
     const dashDecay = Math.exp(-PLAYER_DASH_DRAG * dashTime);
-    const dashTravel = playerSpeed * (1 - dashDecay) / PLAYER_DASH_DRAG;
+    const dashTravel = speed * (1 - dashDecay) / PLAYER_DASH_DRAG;
     const coastTime = time - dashTime;
-    const coastTravel = playerSpeed * dashDecay * (1 - Math.exp(-IDLE_DRAG * coastTime)) / IDLE_DRAG;
+    const coastTravel = speed * dashDecay * (1 - Math.exp(-IDLE_DRAG * coastTime)) / IDLE_DRAG;
     return Math.min(wallDistance, dashTravel + coastTravel);
   }
 
@@ -398,23 +416,20 @@ function predictAngle(player, enemy, playerAngle, playerPower, enemySpeed, enemy
   for (let i = 0; i < 10; i++) {
     const time = (low + high) / 2;
     const lead = travelAt(time);
-    const gap = Math.hypot(player.x + dx * lead - enemy.x, player.y + dy * lead - enemy.y);
+    const gap = Math.hypot(target.x + dx * lead - enemy.x, target.y + dy * lead - enemy.y);
     if (gap - RADIUS * 2 > enemySpeed * time) low = time;
     else high = time;
   }
   const lead = travelAt(high);
-  return Math.atan2(player.y + dy * lead - enemy.y, player.x + dx * lead - enemy.x);
+  return Math.atan2(target.y + dy * lead - enemy.y, target.x + dx * lead - enemy.x);
 }
 
-function planEnemyDash(player, enemy, move, playerAngle, playerPower) {
-  const forward = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+function planEnemyDash(target, enemy, move) {
+  const forward = Math.atan2(target.y - enemy.y, target.x - enemy.x);
   const duration = dashDuration(move.power);
   const speed = dashSpeed(move.power);
   if (move.tactic !== 'dodge') {
-    const angle = move.tactic === 'lead'
-      ? predictAngle(player, enemy, playerAngle, playerPower, speed, duration)
-      : forward;
-    return { angle, speed, duration, phase: 'dash' };
+    return { angle: forward, speed, duration, phase: 'dash' };
   }
 
   const offset = Math.PI * .56 * move.preferredSide;
@@ -429,46 +444,63 @@ function planEnemyDash(player, enemy, move, playerAngle, playerPower) {
   return { angle: usePreferred ? preferredAngle : otherAngle, speed: Math.min(speed, safeSpeed), duration, phase: 'dodge' };
 }
 
-function releaseDashes(playerDash, enemyDash) {
-  const [player, enemy] = tops;
-  if (playerDash) {
-    launch(player, playerDash.angle, playerDash.speed);
-    round.playerDashUntil = round.elapsed + playerDash.duration;
+function planBotDashes(playerDash, angle, power) {
+  const [player] = tops;
+  const living = tops.filter(top => top.hp > 0);
+  const plans = new Map([[player, playerDash]]);
+  const targets = new Map();
+  // Plan all dodges before any bot decides whether to lead its target.
+  for (const bot of living.filter(top => top !== player)) {
+    const opponents = living.filter(top => top !== bot);
+    const target = opponents[Math.floor(Math.random() * opponents.length)];
+    targets.set(bot, target);
+    plans.set(bot, planEnemyDash(target, bot, chooseEnemyMove()));
   }
-  if (enemyDash) {
-    if (tutorial) tutorial.enemyKnocked = false;
-    launch(enemy, enemyDash.angle, enemyDash.speed, enemyDash.phase);
-    round.enemyDashUntil = round.elapsed + enemyDash.duration;
+  for (const [bot, target] of targets) {
+    const dash = plans.get(bot);
+    const targetDash = plans.get(target);
+    const targetDodges = target === player
+      ? isWeakSideMove(player, bot, angle, power)
+      : targetDash.phase === 'dodge' && targetDash.speed > 0;
+    if (dash.phase === 'dash' && targetDodges && Math.random() >= .5) {
+      dash.angle = predictAngle(target, bot, targetDash, dash.speed, dash.duration);
+    }
+  }
+  return plans;
+}
+
+function releaseDashes(dashes) {
+  if (tutorial && dashes.get(tops[1])) tutorial.enemyKnocked = false;
+  for (const [top, dash] of dashes) {
+    if (!dash || top.hp === 0) continue;
+    launch(top, dash.angle, dash.speed, dash.phase);
+    top.dashUntil = round.elapsed + dash.duration;
   }
   round.nextStrike = round.elapsed + PLAYER_STRIKE_INTERVAL;
 }
 
 function strike(angle, power, timedOut = false) {
   if ((!timedOut && power <= 0) || !canStrike()) return;
-  const [player, enemy] = tops;
   const playerDash = power > 0 ? { angle, speed: playerDashSpeed(power), duration: dashDuration(power) } : null;
   const enemyActive = !tutorial || tutorial.stage === 'combat';
-  const weakSideMove = isWeakSideMove(player, enemy, angle, power);
-  const enemyMove = enemyActive ? chooseEnemyMove(weakSideMove) : null;
-  const enemyDash = enemyMove ? planEnemyDash(player, enemy, enemyMove, angle, power) : null;
+  const dashes = enemyActive ? planBotDashes(playerDash, angle, power) : new Map([[tops[0], playerDash]]);
   round.shotTime = null;
   if (playerDash && !fastMode && tutorial?.stage !== 'practice') {
-    pendingDash = { playerDash, enemyDash, remaining: PATH_PREVIEW_SECONDS };
+    pendingDash = { dashes, remaining: PATH_PREVIEW_SECONDS };
   } else {
-    releaseDashes(playerDash, enemyDash);
+    releaseDashes(dashes);
   }
   updateShotClock();
 }
 
 function releasePreview() {
-  const { playerDash, enemyDash } = pendingDash;
+  const { dashes } = pendingDash;
   pendingDash = null;
   accumulator = 0;
-  releaseDashes(playerDash, enemyDash);
+  releaseDashes(dashes);
 }
 
-function collide() {
-  const [a, b] = tops;
+function collide(a, b) {
   const separation = Math.hypot(b.x - a.x, b.y - a.y);
   if (separation >= RADIUS * 2) return;
   const nx = separation > .001 ? (b.x - a.x) / separation : 1;
@@ -481,14 +513,14 @@ function collide() {
   b.x += nx * push;
   b.y += ny * push;
   if (closing <= 0) return;
-  const wasDodging = b.phase === 'dodge';
-  const dashImpact = closing >= 100 && (a.phase === 'dash' || b.phase === 'dash' || wasDodging);
+  const dashImpact = closing >= 100 && (a.phase !== 'idle' || b.phase !== 'idle');
   const force = closing * (dashImpact ? .98 : .8);
   a.vx -= nx * force;
   a.vy -= ny * force;
   b.vx += nx * force;
   b.vy += ny * force;
-  if (wasDodging) b.phase = 'idle';
+  if (a.phase === 'dodge') a.phase = 'idle';
+  if (b.phase === 'dodge') b.phase = 'idle';
   if (!dashImpact) return;
 
   if (tutorial && (a.phase === 'dash' || (tutorial.stage === 'combat' && playerApproach > 0))) {
@@ -547,12 +579,12 @@ function step(dt) {
     else completeTutorial();
     return;
   }
-  if (tops.some(top => top.hp === 0)) {
+  if (!tutorial && (tops[0].hp === 0 || !tops.slice(1).some(top => top.hp > 0))) {
+    if (!rings.length) finish();
+    return;
+  }
+  if (tutorial && tops.some(top => top.hp === 0)) {
     if (rings.length) return;
-    if (!tutorial) {
-      finish();
-      return;
-    }
     for (const top of tops) {
       if (top.hp !== 0) continue;
       top.hp = MAX_HP;
@@ -561,9 +593,12 @@ function step(dt) {
     }
     updateHud();
   }
-  tops.forEach(top => updateTop(top, dt));
-  if (tops.every(top => top.hp > 0)) collide();
-  for (const top of tops) {
+  for (const top of tops) if (top.hp > 0) updateTop(top, dt);
+  const living = tops.filter(top => top.hp > 0);
+  for (let i = 0; i < living.length; i++) {
+    for (let j = i + 1; j < living.length; j++) collide(living[i], living[j]);
+  }
+  for (const top of living) {
     top.trail.push({ x: top.x, y: top.y });
     if (top.trail.length > 21) top.trail.shift();
   }
@@ -577,30 +612,30 @@ function oval(x, y, rx, ry, fill, stroke, width = 1) {
 }
 
 function drawArena() {
-  oval(0, 8, ARENA_RADIUS + 14, ARENA_RADIUS + 14, '#101216');
-  oval(0, 0, ARENA_RADIUS + 12, ARENA_RADIUS + 12, '#2b3036', '#5b5c57', 1.4);
-  oval(0, 0, ARENA_RADIUS + 4, ARENA_RADIUS + 4, '#444741', '#15191c', 2);
-  const floor = ctx.createRadialGradient(0, -25, 10, 0, 0, ARENA_RADIUS);
+  oval(0, 8, arenaRadius + 14, arenaRadius + 14, '#101216');
+  oval(0, 0, arenaRadius + 12, arenaRadius + 12, '#2b3036', '#5b5c57', 1.4);
+  oval(0, 0, arenaRadius + 4, arenaRadius + 4, '#444741', '#15191c', 2);
+  const floor = ctx.createRadialGradient(0, -25, 10, 0, 0, arenaRadius);
   floor.addColorStop(0, '#2d3438');
   floor.addColorStop(1, '#191e24');
-  oval(0, 0, ARENA_RADIUS - 6, ARENA_RADIUS - 6, floor, '#a69260', 1.4);
+  oval(0, 0, arenaRadius - 6, arenaRadius - 6, floor, '#a69260', 1.4);
 
   ctx.save();
   ctx.clip();
   ctx.beginPath();
-  for (let x = -Math.floor(ARENA_RADIUS / 24) * 24; x <= ARENA_RADIUS; x += 24) {
-    ctx.moveTo(x, -ARENA_RADIUS);
-    ctx.lineTo(x, ARENA_RADIUS);
+  for (let x = -Math.floor(arenaRadius / 24) * 24; x <= arenaRadius; x += 24) {
+    ctx.moveTo(x, -arenaRadius);
+    ctx.lineTo(x, arenaRadius);
   }
-  for (let y = -Math.floor(ARENA_RADIUS / 24) * 24; y <= ARENA_RADIUS; y += 24) {
-    ctx.moveTo(-ARENA_RADIUS, y);
-    ctx.lineTo(ARENA_RADIUS, y);
+  for (let y = -Math.floor(arenaRadius / 24) * 24; y <= arenaRadius; y += 24) {
+    ctx.moveTo(-arenaRadius, y);
+    ctx.lineTo(arenaRadius, y);
   }
   ctx.lineWidth = 1;
   ctx.strokeStyle = '#b9c4b510';
   ctx.stroke();
-  oval(0, 0, ARENA_RADIUS * .78, ARENA_RADIUS * .78, null, '#d4c59b28');
-  oval(0, 0, ARENA_RADIUS * .56, ARENA_RADIUS * .56, null, '#d4c59b18');
+  oval(0, 0, arenaRadius * .78, arenaRadius * .78, null, '#d4c59b28');
+  oval(0, 0, arenaRadius * .56, arenaRadius * .56, null, '#d4c59b18');
   oval(0, 0, 41, 41, null, '#e1cd9a32');
   oval(0, 0, 8, 8, null, '#e1cd9a56');
   ctx.restore();
@@ -610,8 +645,8 @@ function drawArena() {
     const x = Math.cos(angle);
     const y = Math.sin(angle);
     ctx.beginPath();
-    ctx.moveTo(x * (ARENA_RADIUS + 7), y * (ARENA_RADIUS + 7));
-    ctx.lineTo(x * (ARENA_RADIUS + 10), y * (ARENA_RADIUS + 10));
+    ctx.moveTo(x * (arenaRadius + 7), y * (arenaRadius + 7));
+    ctx.lineTo(x * (arenaRadius + 10), y * (arenaRadius + 10));
     ctx.strokeStyle = i % 5 === 0 ? '#e6d291' : '#777565';
     ctx.lineWidth = i % 5 === 0 ? 2 : 1;
     ctx.stroke();
@@ -809,19 +844,19 @@ function draw() {
     drawTop(tops[highlightedTop]);
     return;
   }
-  tops.forEach(drawTrail);
+  const living = tutorial ? tops : tops.filter(top => top.hp > 0);
+  living.forEach(drawTrail);
   for (const ring of rings) {
     ctx.globalAlpha = ring.life / .37;
     const radius = 13 + (1 - ctx.globalAlpha) * 49;
     oval(ring.x, ring.y, radius, radius, null, ring.color, 2);
   }
   ctx.globalAlpha = 1;
-  tops.forEach(drawTop);
+  living.forEach(drawTop);
   if (pendingDash) {
     const previewElapsed = PATH_PREVIEW_SECONDS - pendingDash.remaining;
     const opacity = reducedMotion.matches ? 1 : .65 + .35 * Math.cos(previewElapsed * TAU * 2);
-    drawDashPath(tops[0], pendingDash.playerDash, true, opacity);
-    drawDashPath(tops[1], pendingDash.enemyDash, false, opacity);
+    for (const [top, dash] of pendingDash.dashes) drawDashPath(top, dash, top === tops[0], opacity);
   }
   if (!reducedMotion.matches) {
     for (const spark of sparks) {
@@ -862,7 +897,7 @@ function resize() {
   const playfieldTop = score.getBoundingClientRect().bottom - bounds.top;
   const playfieldHeight = Math.max(0, drawHeight - playfieldTop);
   arenaCenterY = (playfieldTop + drawHeight) / 2;
-  scale = Math.min(drawWidth, playfieldHeight) / (2 * (ARENA_RADIUS + 25));
+  scale = Math.min(drawWidth, playfieldHeight) / (2 * (arenaRadius + 25));
   joystickRadius = clamp(playfieldHeight * .25, 44, 68);
   draw();
 }
@@ -936,7 +971,7 @@ tutorialNext.addEventListener('click', () => {
   if (tutorialIntro.hidden) return;
   if (tutorial.stage === 'intro') {
     tutorial.stage = 'enemyIntro';
-    tutorialIntroText.textContent = '이것은 칸타의 팽이입니다';
+    tutorialIntroText.textContent = '이것은 마요의 팽이입니다';
     return;
   }
   tutorial.stage = 'practice';
