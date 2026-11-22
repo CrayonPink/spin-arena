@@ -97,7 +97,7 @@ button:focus-visible{outline:2px solid #fff;outline-offset:2px}
     <button id="begin" class="primary">게임 시작</button>
   </div>
   <div id="result" class="result" hidden><strong id="verdict" role="status"></strong><span id="resultProgress" class="challenge-text"></span><button id="rematch" class="primary">다시하기</button></div>
-  <span class="version">v0.60</span>
+  <span class="version">v0.61</span>
   <div id="fastModeGuide" class="fast-mode-guide" hidden>
     <div class="tutorial-copy">
       <strong>배속 모드를 활성화하면 경로 표시 없이 빠르게 진행할 수 있습니다</strong>
@@ -334,6 +334,10 @@ function dashSpeed(power) {
   return 350 + power * 520;
 }
 
+function playerDashSpeed(power) {
+  return dashSpeed(1) * power;
+}
+
 function launch(top, angle, speed, phase = 'dash') {
   top.vx = Math.cos(angle) * speed;
   top.vy = Math.sin(angle) * speed;
@@ -363,8 +367,19 @@ function distanceToWall(top, angle) {
   return Math.max(0, -along + Math.sqrt(discriminant));
 }
 
+function playerTravelToWall(top, angle, speed, duration) {
+  // Each physics step applies drag before advancing the top.
+  const dashSteps = Math.ceil(duration / FIXED_STEP) - 1;
+  const dashDrag = Math.exp(-PLAYER_DASH_DRAG * FIXED_STEP);
+  const idleDrag = Math.exp(-IDLE_DRAG * FIXED_STEP);
+  const remaining = dashDrag ** dashSteps;
+  const dashTravel = speed * FIXED_STEP * dashDrag * (1 - remaining) / (1 - dashDrag);
+  const coastTravel = speed * FIXED_STEP * remaining * idleDrag / (1 - idleDrag);
+  return Math.min(dashTravel + coastTravel, distanceToWall(top, angle));
+}
+
 function predictAngle(player, enemy, playerAngle, playerPower, enemySpeed, enemyDuration) {
-  const playerSpeed = dashSpeed(playerPower);
+  const playerSpeed = playerDashSpeed(playerPower);
   const playerDuration = dashDuration(playerPower);
   const wallDistance = distanceToWall(player, playerAngle);
   const dx = Math.cos(playerAngle);
@@ -431,7 +446,7 @@ function releaseDashes(playerDash, enemyDash) {
 function strike(angle, power, timedOut = false) {
   if ((!timedOut && power <= 0) || !canStrike()) return;
   const [player, enemy] = tops;
-  const playerDash = power > 0 ? { angle, speed: dashSpeed(power), duration: dashDuration(power) } : null;
+  const playerDash = power > 0 ? { angle, speed: playerDashSpeed(power), duration: dashDuration(power) } : null;
   const enemyActive = !tutorial || tutorial.stage === 'combat';
   const weakSideMove = isWeakSideMove(player, enemy, angle, power);
   const enemyMove = enemyActive ? chooseEnemyMove(weakSideMove) : null;
@@ -651,18 +666,12 @@ function drawTop(top) {
 
 function drawDashPath(top, dash, playerPath, opacity) {
   if (!dash || dash.speed <= 0) return;
-  let travel = dash.speed * dash.duration;
-  if (dash.phase === 'dodge') {
-    travel *= .5;
-  } else if (playerPath) {
-    const remainingSpeed = dash.speed * Math.exp(-PLAYER_DASH_DRAG * dash.duration);
-    travel = (dash.speed - remainingSpeed) / PLAYER_DASH_DRAG + remainingSpeed / IDLE_DRAG;
-  } else {
-    travel += dash.speed / IDLE_DRAG;
-  }
-
-  const length = Math.min(travel, distanceToWall(top, dash.angle));
-  const tip = Math.max(length, RADIUS - 3);
+  const enemyTravel = dash.speed * (dash.phase === 'dodge' ? dash.duration / 2 : dash.duration + 1 / IDLE_DRAG);
+  const length = playerPath
+    ? playerTravelToWall(top, dash.angle, dash.speed, dash.duration)
+    : Math.min(enemyTravel, distanceToWall(top, dash.angle));
+  const tip = playerPath ? length : Math.max(length, RADIUS - 3);
+  if (tip <= 0) return;
   ctx.save();
   ctx.translate(top.x, top.y);
   ctx.rotate(dash.angle);
@@ -679,7 +688,7 @@ function drawDashPath(top, dash, playerPath, opacity) {
     ctx.setLineDash([]);
   }
 
-  const arrow = Math.min(13, Math.max(7, (tip - RADIUS) / 2));
+  const arrow = Math.min(13, Math.max(7, (tip - RADIUS) / 2), tip * .6);
   ctx.beginPath();
   ctx.moveTo(tip - arrow, -arrow * .6);
   ctx.lineTo(tip, 0);
@@ -693,6 +702,9 @@ function drawAim() {
   const player = tops[0];
   const { angle, power } = gesture;
   if (power <= 0) return;
+  const tip = playerTravelToWall(player, angle, playerDashSpeed(power), dashDuration(power));
+  if (tip <= 0) return;
+  const arrow = Math.min(11, tip * .55);
   const chargeColor = power >= .95 ? '#ffe4a0' : player.color.light;
   ctx.save();
   ctx.translate(player.x, player.y);
@@ -701,13 +713,12 @@ function drawAim() {
   ctx.lineWidth = 3;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  const tip = RADIUS + 34 + 34 * power;
   ctx.beginPath();
-  ctx.moveTo(RADIUS + 15, 0);
+  ctx.moveTo(tip > RADIUS + 15 ? RADIUS + 3 : 0, 0);
   ctx.lineTo(tip, 0);
-  ctx.moveTo(tip - 11, -8);
+  ctx.moveTo(tip - arrow, -arrow * .7);
   ctx.lineTo(tip, 0);
-  ctx.lineTo(tip - 11, 8);
+  ctx.lineTo(tip - arrow, arrow * .7);
   ctx.stroke();
   ctx.restore();
 }
